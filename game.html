@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>44교시 생존수업 — Prologue</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;background:#07090d;color:#eee;font-family:system-ui,-apple-system,'Noto Sans KR',sans-serif;overflow:hidden}#game{height:100vh;display:flex;flex-direction:column}#hud{height:54px;background:#11151d;border-bottom:1px solid #343b49;display:flex;align-items:center;justify-content:space-between;padding:0 14px;z-index:5}#hud b{letter-spacing:1px}#objective{font-size:12px;color:#b9c2d3}.stage{position:relative;flex:1;overflow:hidden;background:#20252d}canvas{display:block;width:100%;height:100%;image-rendering:pixelated}#dialog{position:absolute;left:3%;right:3%;bottom:78px;background:rgba(7,9,13,.94);border:1px solid #697386;padding:15px;display:none;z-index:10;box-shadow:0 8px 30px #000}.name{font-weight:800;color:#f0c98b;margin-bottom:7px}.text{line-height:1.65;font-size:15px}.choices{display:grid;gap:7px;margin-top:10px}.choices button,#start button{background:#171d27;color:#f2f4f8;border:1px solid #596375;padding:11px;border-radius:5px;text-align:left}.choices button:hover{background:#242c39}#touch{position:absolute;bottom:10px;left:10px;right:10px;display:flex;justify-content:space-between;pointer-events:none;z-index:8}.pad{display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(2,48px);gap:4px;pointer-events:auto}.pad button,.act{background:rgba(20,25,34,.72);border:1px solid #687286;color:white;border-radius:8px;font-size:20px}.pad .up{grid-column:2}.pad .left{grid-column:1}.pad .down{grid-column:2}.pad .right{grid-column:3}.act{width:70px;height:70px;align-self:end}.hint{position:absolute;top:65px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.55);padding:6px 10px;border-radius:12px;font-size:11px;z-index:4}#start{position:absolute;inset:0;background:#07090d;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:30}#start h1{font-size:28px;letter-spacing:4px;margin:0 0 10px}#start p{max-width:500px;color:#aeb7c8;line-height:1.7}#start button{margin-top:18px;text-align:center;width:220px}#black{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;z-index:20;transition:opacity .6s}.danger{color:#e98989!important}@media(min-width:800px){#touch{display:none}.hint{display:block}}@media(max-width:799px){.hint{top:8px}}
+</style>
+</head>
+<body>
+<div id="game">
+<header id="hud"><b>44교시 생존수업</b><span id="objective">목표: 교실을 조사하자</span></header>
+<div class="stage"><canvas id="c"></canvas><div class="hint">WASD / 방향키로 이동 · E로 조사/대화</div><div id="black"></div>
+<div id="dialog"><div class="name" id="dname"></div><div class="text" id="dtext"></div><div class="choices" id="choices"></div></div>
+<div id="touch"><div class="pad"><button class="up" data-k="w">▲</button><button class="left" data-k="a">◀</button><button class="down" data-k="s">▼</button><button class="right" data-k="d">▶</button></div><button class="act" data-k="e">E</button></div>
+</div></div>
+<div id="start"><h1>44교시 생존수업</h1><p>마지막 종이 울린 뒤 학교에 아무도 남지 않았다.<br>누나는 보건실에 있다. 그리고 학교 방송이 말했다.<br><br><b>“지금부터 44교시를 시작합니다.”</b></p><button id="startBtn">게임 시작</button></div>
+<script>
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');let W,H,started=false,last=0,keys={};
+const player={x:160,y:350,r:13,s:155};const monster={x:760,y:160,r:17,s:72,active:false};let scene=0,dead=false;
+const walls=[
+{x:0,y:0,w:1000,h:28},{x:0,y:560,w:1000,h:28},{x:0,y:0,w:28,h:588},{x:972,y:0,w:28,h:588},
+{x:220,y:120,w:170,h:34},{x:520,y:120,w:170,h:34},{x:220,y:280,w:34,h:150},{x:520,y:280,w:34,h:150},
+{x:730,y:280,w:120,h:34},{x:360,y:440,w:170,h:34},{x:90,y:170,w:100,h:30}
+];
+const props=[{x:245,y:185,w:72,h:48,label:'책상'},{x:410,y:185,w:72,h:48,label:'책상'},{x:600,y:190,w:72,h:48,label:'책상'},{x:760,y:390,w:64,h:50,label:'사물함'},{x:120,y:430,w:70,h:50,label:'사물함'}];
+function resize(){const r=cv.parentElement.getBoundingClientRect(),d=Math.min(2,devicePixelRatio||1);cv.width=r.width*d;cv.height=r.height*d;W=r.width;H=r.height;ctx.setTransform(d,0,0,d,0,0)}window.addEventListener('resize',resize);resize();
+function rectCircle(x,y,r,o){const nx=Math.max(o.x,Math.min(x,o.x+o.w)),ny=Math.max(o.y,Math.min(y,o.y+o.h));return (x-nx)**2+(y-ny)**2<r*r}
+function blocked(x,y,r){return walls.some(o=>rectCircle(x,y,r,o))||props.some(o=>rectCircle(x,y,r,o))}
+function move(ent,dx,dy){let nx=ent.x+dx;if(!blocked(nx,ent.y,ent.r))ent.x=nx;let ny=ent.y+dy;if(!blocked(ent.x,ny,ent.r))ent.y=ny}
+function worldToScreen(){return {x:Math.max(0,Math.min(1000-W,player.x-W/2)),y:Math.max(0,Math.min(588-H,player.y-H/2))}}
+function draw(){ctx.clearRect(0,0,W,H);let cam=worldToScreen();ctx.save();ctx.translate(-cam.x,-cam.y);
+ctx.fillStyle='#2c323b';ctx.fillRect(0,0,1000,588);ctx.fillStyle='#39404a';for(let x=28;x<972;x+=48)for(let y=28;y<560;y+=48){ctx.fillRect(x,y,1,1)}
+ctx.fillStyle='#171b21';walls.forEach(o=>ctx.fillRect(o.x,o.y,o.w,o.h));props.forEach(o=>{ctx.fillStyle=o.label==='사물함'?'#4b3d37':'#675849';ctx.fillRect(o.x,o.y,o.w,o.h);ctx.fillStyle='#241f1b';ctx.fillRect(o.x+8,o.y+8,o.w-16,8);ctx.fillStyle='#c2a66f';ctx.fillRect(o.x+o.w/2-2,o.y+o.h/2,4,4)});
+// player placeholder sprite; replace with uploaded art later
+ctx.fillStyle='#d8e6ff';ctx.beginPath();ctx.arc(player.x,player.y,player.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#172131';ctx.fillRect(player.x-6,player.y-2,12,3);
+if(monster.active){ctx.fillStyle='#8c303b';ctx.beginPath();ctx.arc(monster.x,monster.y,monster.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ffdfdf';ctx.fillRect(monster.x-8,monster.y-4,5,4);ctx.fillRect(monster.x+3,monster.y-4,5,4)}
+ctx.restore();}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function showDialog(name,text,buttons=[]){document.getElementById('dname').textContent=name;document.getElementById('dtext').innerHTML=text;const box=document.getElementById('choices');box.innerHTML='';buttons.forEach(b=>{let q=document.createElement('button');q.textContent=b.label;q.onclick=b.fn;box.appendChild(q)});document.getElementById('dialog').style.display='block'}
+function closeDialog(){document.getElementById('dialog').style.display='none'}
+function storyStart(){showDialog('누나','“너 아직 학교야?”<br>“응. 근데 애들이 아무도 없어.”<br><br><b>누나:</b> “복도에 나가면 오른쪽 계단으로 내려가. 그리고… 보건실로 오지 마.”',[{label:'“왜? 무슨 일인데?”',fn:()=>showDialog('누나','“……절대 혼자 돌아다니지 마.”<br><br>전화 너머에서 무언가 긁히는 소리가 들린다.',[{label:'전화를 끊고 교실을 조사한다',fn:beginGame}])}])}
+function beginGame(){closeDialog();document.getElementById('objective').textContent='목표: 교실 밖으로 나가자';scene=1}
+function interact(){if(dead||!started)return;if(scene===1){scene=2;document.getElementById('objective').textContent='목표: 오른쪽 계단으로 이동하자';showDialog('이상한 출석부','맨 뒷자리에서 출석부를 발견했다.<br><br>주인공의 이름 옆에는 <b>결석</b>이라고 적혀 있다.',[{label:'출석부를 챙긴다',fn:()=>{closeDialog();monster.active=true;document.getElementById('objective').textContent='목표: 괴물을 피해 계단으로 가자';addEvent()}}]);return}if(scene===2&&player.x>850&&player.y>300){scene=3;monster.active=false;showDialog('학교 방송','치직—<br><br>“학생 여러분. 지금부터…… 44교시를 시작합니다.”<br><br>딩—동.',[{label:'계속 진행한다',fn:()=>{closeDialog();scene=4;document.getElementById('objective').textContent='목표: 보건실로 향하지 말고 지하층 단서를 찾자'}}]);return}if(scene===4){showDialog('메모','누나의 필체다.<br><br>“나를 찾지 마. 대신 방송실 아래를 확인해.”',[{label:'메모를 챙긴다',fn:()=>{closeDialog();scene=5;document.getElementById('objective').textContent='목표: 다음 챕터 — 방송실'}}]);}}
+function addEvent(){setTimeout(()=>{if(started&&!dead)showDialog('???','복도 끝에서 무언가가 움직인다.<br><br>책상 뒤로 돌아간다. <b>괴물도 책상을 통과하지 못한다.</b>',[{label:'숨을 죽인다',fn:closeDialog}])},500)}
+function gameOver(){dead=true;showDialog('GAME OVER','괴물에게 붙잡혔다.<br><br>장애물을 이용해 거리를 벌려야 한다.',[{label:'다시 시작',fn:()=>location.reload()}])}
+function tick(t){let dt=Math.min(.033,(t-last)/1000||0);last=t;if(started&&!dead&&document.getElementById('dialog').style.display!=='block'){let dx=0,dy=0;if(keys.w||keys.arrowup)dy-=1;if(keys.s||keys.arrowdown)dy+=1;if(keys.a||keys.arrowleft)dx-=1;if(keys.d||keys.arrowright)dx+=1;if(dx||dy){let n=Math.hypot(dx,dy);move(player,dx/n*player.s*dt,dy/n*player.s*dt)}if(monster.active){let dx=player.x-monster.x,dy=player.y-monster.y,n=Math.hypot(dx,dy)||1;move(monster,dx/n*monster.s*dt,dy/n*monster.s*dt);if(dist(player,monster)<player.r+monster.r+3)gameOver()}}draw();requestAnimationFrame(tick)}
+window.addEventListener('keydown',e=>{let k=e.key.toLowerCase();keys[k]=true;if(k==='e')interact()});window.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);document.querySelectorAll('[data-k]').forEach(b=>{let k=b.dataset.k;b.addEventListener('pointerdown',e=>{e.preventDefault();if(k==='e')interact();else keys[k]=true});['pointerup','pointercancel','pointerleave'].forEach(ev=>b.addEventListener(ev,()=>keys[k]=false))});
+document.getElementById('startBtn').onclick=()=>{document.getElementById('start').style.display='none';started=true;storyStart()};
+</script></body></html>
